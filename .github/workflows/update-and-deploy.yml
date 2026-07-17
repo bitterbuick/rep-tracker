@@ -5,7 +5,7 @@ on:
     - cron: "17 6,18 * * *"   # twice daily, 06:17 & 18:17 UTC
   workflow_dispatch:
   push:
-    branches: [main]
+    branches: [main, "claude/**"]
 
 permissions:
   contents: write
@@ -24,7 +24,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main
+          ref: ${{ github.ref_name }}   # branch tip (default branch on schedule/dispatch)
 
       - uses: actions/setup-python@v5
         with:
@@ -46,7 +46,7 @@ jobs:
             git config user.email "github-actions[bot]@users.noreply.github.com"
             git add data/
             git commit -m "data: refresh Salinas roll-call votes ($(date -u +%F))"
-            git push origin main
+            git push origin HEAD:"$GITHUB_REF_NAME"
             echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
@@ -60,7 +60,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: main   # picks up the data commit from the update job, if any
+          ref: ${{ github.ref_name }}   # picks up the data commit from the update job, if any
 
       - name: Assemble site
         run: |
