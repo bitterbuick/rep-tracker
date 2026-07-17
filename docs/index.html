@@ -20,6 +20,8 @@
   --series-dem: #2a78d6;   /* categorical slot 1 (blue) — Salinas / Democratic */
   --series-rep: #e34948;   /* categorical slot 8 (red) — Republican */
   --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
   --status-critical: #d03b3b;
   --delta-good: #006300;
   --wash: rgba(11,11,11,0.045);
@@ -206,6 +208,13 @@ footer a { color: var(--text-secondary); }
       <option value="with">Voted with Democrats</option>
       <option value="broke">Broke with Democrats</option>
     </select>
+    <select id="bandFilter" aria-label="Filter by democracy-risk band">
+      <option value="">Risk: all bands</option>
+      <option value="Low">Low</option>
+      <option value="Moderate">Moderate</option>
+      <option value="High">High</option>
+      <option value="Critical">Critical</option>
+    </select>
     <input type="search" id="search" placeholder="Search bill or subject…" aria-label="Search bill or subject">
   </div>
 
@@ -249,6 +258,22 @@ footer a { color: var(--text-secondary); }
       </section>
     </div>
 
+    <div class="grid2">
+      <section class="card">
+        <h2>Democracy-risk matrix</h2>
+        <p class="desc">Institutional impact × how far the measure advanced. Tap a cell to filter the page; tap again to clear.</p>
+        <div id="chMatrix"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+
+      <section class="card">
+        <h2>Democracy-salient votes</h2>
+        <p class="desc" id="hrDesc"></p>
+        <div class="vote-list" id="hrList"></div>
+        <button class="morebtn" id="hrMore" hidden>Show more</button>
+      </section>
+    </div>
+
     <section class="card">
       <h2>Votes where she broke with Democrats</h2>
       <p class="desc" id="brokeDesc"></p>
@@ -261,12 +286,13 @@ footer a { color: var(--text-secondary); }
       <p class="count-note" id="recCount"></p>
       <div class="vote-list" id="recList"></div>
       <button class="morebtn" id="recMore" hidden>Show more</button>
-      <p class="dl" style="margin-top:10px">Download the raw data: <a href="data/salinas_votes.csv" download>CSV</a> · <a href="data/salinas_votes.json" download>JSON</a></p>
+      <p class="dl" style="margin-top:10px">Download: <a href="data/salinas_votes_scored.csv" download>CSV with risk scores</a> · <a href="data/salinas_votes_scored.json" download>JSON</a> · <a href="data/salinas_votes.csv" download>raw CSV</a></p>
     </section>
 
     <footer>
       Source: <a href="https://clerk.house.gov/Votes" rel="noopener">Clerk of the U.S. House — roll-call vote XML (EVS)</a>.
       Refreshed daily via GitHub Actions. “Party unity” compares her Yea/Nay votes with the majority position of voting House Democrats on each roll call; quorum calls and votes where she did not vote Yea/Nay are excluded from unity math.
+      The democracy-risk matrix is a transparent heuristic: impact comes from an editable keyword rubric over each measure's subject (elections, checks &amp; balances, judiciary, civil liberties…), advancement from how far the vote moved the measure toward taking effect; score = impact × advancement. It flags salience for review — it is not a judgment of intent, and her vote (for or against) is shown beside every flagged measure. Rubric and per-vote overrides live in the repo.
       This is an independent, unofficial tracker.
     </footer>
   </main>
@@ -284,14 +310,27 @@ const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct"
 
 let ALL = [];       // all vote records, annotated
 let META = {};
-const state = { year: "", vote: "", align: "", q: "", brokeShown: 15, recShown: 25 };
+let HAS_RISK = false;
+const state = { year: "", vote: "", align: "", q: "", band: "", cell: null, brokeShown: 15, recShown: 25, hrShown: 10 };
+const BAND_ORDER = ["Low", "Moderate", "High", "Critical"];
+function bandOf(score) { return score <= 4 ? "Low" : score <= 9 ? "Moderate" : score <= 16 ? "High" : "Critical"; }
+function bandColor(b) {
+  return b === "Low" ? css("--status-good") : b === "Moderate" ? css("--status-warning")
+       : b === "High" ? css("--status-serious") : css("--status-critical");
+}
 
 /* ---------- data load ---------- */
-fetch("data/salinas_votes.json")
+fetch("data/salinas_votes_scored.json")
   .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .catch(() => fetch("data/salinas_votes.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }))
   .then(payload => {
     META = payload;
     ALL = payload.votes.map(annotate);
+    HAS_RISK = ALL.length > 0 && "risk_band" in ALL[0];
+    if (!HAS_RISK) {
+      document.getElementById("bandFilter").hidden = true;
+      document.getElementById("chMatrix").closest(".grid2").hidden = true;
+    }
     document.getElementById("updated").textContent =
       "Data through " + (ALL.length ? ALL[ALL.length - 1].date : "–") +
       " · " + fmtInt(ALL.length) + " roll calls · updated " + (payload.updated || "").slice(0, 10);
@@ -345,6 +384,7 @@ function buildYearChips() {
 function bindFilters() {
   document.getElementById("voteFilter").addEventListener("change", e => { state.vote = e.target.value; resetPaging(); render(); });
   document.getElementById("alignFilter").addEventListener("change", e => { state.align = e.target.value; resetPaging(); render(); });
+  document.getElementById("bandFilter").addEventListener("change", e => { state.band = e.target.value; state.cell = null; resetPaging(); render(); });
   let deb = null;
   document.getElementById("search").addEventListener("input", e => {
     clearTimeout(deb);
@@ -352,12 +392,19 @@ function bindFilters() {
   });
   document.getElementById("brokeMore").addEventListener("click", () => { state.brokeShown += 25; renderBroke(filtered()); });
   document.getElementById("recMore").addEventListener("click", () => { state.recShown += 50; renderRecord(filtered()); });
+  document.getElementById("hrMore").addEventListener("click", () => { state.hrShown += 25; renderHighRisk(filtered()); });
 }
-function resetPaging() { state.brokeShown = 15; state.recShown = 25; }
+function resetPaging() { state.brokeShown = 15; state.recShown = 25; state.hrShown = 10; }
 
 function filtered() {
+  return filteredExceptCell().filter(v =>
+    !state.cell || (v.risk_impact === state.cell.i && v.risk_likelihood === state.cell.l));
+}
+
+function filteredExceptCell() {
   return ALL.filter(v => {
     if (state.year && String(v.year) !== state.year) return false;
+    if (state.band && v.risk_band !== state.band) return false;
     if (state.vote) {
       if (state.vote === "Yea" && v.herDir !== "Yea") return false;
       else if (state.vote === "Nay" && v.herDir !== "Nay") return false;
@@ -375,12 +422,17 @@ function filtered() {
 }
 
 /* ---------- render orchestration ---------- */
-function render() { const data = filtered(); renderKPIs(data); renderCharts(data); renderBroke(data); renderRecord(data); }
+function render() {
+  const data = filtered();
+  renderKPIs(data); renderCharts(data); renderBroke(data); renderRecord(data);
+  if (HAS_RISK) { chartMatrix(filteredExceptCell()); renderHighRisk(data); }
+}
 let lastData = null;
 function renderCharts(data) {
   if (Array.isArray(data)) lastData = data;
   if (!lastData) return;
   chartActivity(lastData); chartSplit(lastData); chartUnity(lastData); chartOutcome(lastData);
+  if (HAS_RISK && !Array.isArray(data)) chartMatrix(filteredExceptCell()); // resize path
 }
 
 function renderKPIs(data) {
@@ -672,6 +724,80 @@ function chartOutcome(data) {
     rows.map(r => [r.name, fmtInt(r.won), fmtInt(r.lost), fmtPct((r.won + r.lost) ? r.won / (r.won + r.lost) : 0)]));
 }
 
+/* ---------- risk matrix (5x5 heatmap, semantic severity heat) ---------- */
+function chartMatrix(data) {
+  const host = document.getElementById("chMatrix");
+  clear2(host);
+  // legend: band severity scale (status colors always paired with their label)
+  const lg = document.createElement("div"); lg.className = "legend";
+  BAND_ORDER.forEach(b => {
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("i"); sw.className = "swatch"; sw.style.background = bandColor(b);
+    const t = document.createElement("span"); t.textContent = b;
+    k.appendChild(sw); k.appendChild(t); lg.appendChild(k);
+  });
+  host.appendChild(lg);
+
+  const counts = {};
+  data.forEach(v => {
+    const key = v.risk_impact + "-" + v.risk_likelihood;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const W = Math.max(host.clientWidth || 320, 280);
+  const m = { l: 46, t: 6, b: 40 };
+  const cs = Math.min((W - m.l - 6) / 5, 58);
+  const H = m.t + cs * 5 + m.b;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Risk matrix: impact by advancement, cell counts" }, host);
+  for (let i = 5; i >= 1; i--) {
+    const y = m.t + (5 - i) * cs;
+    el("text", { x: m.l - 8, y: y + cs / 2 + 3.5, "text-anchor": "end", "font-size": 11, fill: css("--text-muted") }, svg).textContent = i;
+    for (let l = 1; l <= 5; l++) {
+      const x = m.l + (l - 1) * cs;
+      const n = counts[i + "-" + l] || 0;
+      const b = bandOf(i * l);
+      const sel = state.cell && state.cell.i === i && state.cell.l === l;
+      const cell = el("rect", {
+        x: x + 1, y: y + 1, width: cs - 2, height: cs - 2, rx: 4,
+        fill: bandColor(b), "fill-opacity": n > 0 ? 0.34 : 0.10,
+        stroke: sel ? css("--text-primary") : "none", "stroke-width": sel ? 2 : 0,
+        tabindex: 0, role: "button", cursor: "pointer",
+        "aria-label": `Impact ${i}, advancement ${l}: ${n} votes, ${b} band` + (sel ? " (selected)" : ""),
+      }, svg);
+      cell.style.cursor = "pointer";
+      if (n > 0) {
+        el("text", { x: x + cs / 2, y: y + cs / 2 + 4, "text-anchor": "middle", "font-size": 12, "font-weight": 600, fill: css("--text-primary"), "pointer-events": "none" }, svg).textContent = fmtInt(n);
+      }
+      const toggle = () => { state.cell = sel ? null : { i, l }; state.brokeShown = 15; state.recShown = 25; state.hrShown = 10; render(); };
+      cell.addEventListener("click", toggle);
+      cell.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      cell.addEventListener("pointermove", e => showTip(e.clientX, e.clientY,
+        "Impact " + i + " × Advancement " + l,
+        [{ color: bandColor(b), value: fmtInt(n), label: "votes · " + b + " band" }]));
+      cell.addEventListener("pointerleave", hideTip);
+    }
+  }
+  for (let l = 1; l <= 5; l++) {
+    el("text", { x: m.l + (l - 1) * cs + cs / 2, y: m.t + cs * 5 + 15, "text-anchor": "middle", "font-size": 11, fill: css("--text-muted") }, svg).textContent = l;
+  }
+  el("text", { x: m.l + cs * 2.5, y: H - 6, "text-anchor": "middle", "font-size": 10.5, fill: css("--text-secondary") }, svg).textContent = "Advancement toward taking effect →";
+  el("text", { x: 12, y: m.t + cs * 2.5, "font-size": 10.5, fill: css("--text-secondary"), transform: `rotate(-90 12 ${m.t + cs * 2.5})`, "text-anchor": "middle" }, svg).textContent = "Institutional impact →";
+
+  fillTable(host.closest(".card"), ["Impact ↓ / Advancement →", "1", "2", "3", "4", "5"],
+    [5, 4, 3, 2, 1].map(i => [String(i)].concat([1, 2, 3, 4, 5].map(l => fmtInt(counts[i + "-" + l] || 0)))));
+}
+
+/* ---------- democracy-salient votes (High + Critical) ---------- */
+function renderHighRisk(data) {
+  const hr = data.filter(v => v.risk_score >= 10).slice().reverse();
+  document.getElementById("hrDesc").textContent =
+    fmtInt(hr.length) + " High/Critical-band roll calls under the current filters (most recent first)";
+  const list = document.getElementById("hrList");
+  clear2(list);
+  hr.slice(0, state.hrShown).forEach(v => list.appendChild(voteItem(v)));
+  if (!hr.length) { const d = document.createElement("div"); d.className = "count-note"; d.textContent = "None under the current filters."; list.appendChild(d); }
+  document.getElementById("hrMore").hidden = hr.length <= state.hrShown;
+}
+
 /* ---------- vote item renderer ---------- */
 function voteItem(v) {
   const item = document.createElement("article"); item.className = "vote-item";
@@ -702,6 +828,14 @@ function voteItem(v) {
   if (v.withParty === false) {
     const bk = document.createElement("span"); bk.className = "broke"; bk.textContent = "✕ broke with Dems";
     badges.appendChild(bk);
+  }
+  if (HAS_RISK && v.risk_band && v.risk_band !== "Low") {
+    const rk = document.createElement("span"); rk.className = "riskchip";
+    const dot = document.createElement("i"); dot.style.cssText = "display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:baseline;background:" + bandColor(v.risk_band);
+    rk.appendChild(dot);
+    rk.appendChild(document.createTextNode(v.risk_band + " risk" + (v.risk_domain && v.risk_domain !== "Routine policy" ? " · " + v.risk_domain : "")));
+    rk.style.cssText += ";font-size:.74rem;color:var(--text-secondary)";
+    badges.appendChild(rk);
   }
   item.appendChild(badges);
   return item;

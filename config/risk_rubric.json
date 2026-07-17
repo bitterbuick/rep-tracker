@@ -1,0 +1,47 @@
+{
+  "description": "Keyword rubric mapping roll-call votes to democratic-institution impact scores (1-5). Matched case-insensitively against bill number + question + subject. The HIGHEST severity among matched domains wins; unmatched votes default to impact 1 (routine policy). Edit freely - the scorer and dashboard pick changes up on the next run.",
+  "default_impact": 1,
+  "default_domain": "Routine policy",
+  "domains": [
+    {
+      "name": "Elections & voting rights",
+      "impact": 5,
+      "keywords": ["election", "voting rights", "voter", "ballot", "redistricting", "electoral count", "electoral college", "franchise", "gerrymander", "poll worker", "federal election commission", "campaign finance", "citizens united"]
+    },
+    {
+      "name": "Checks & balances / executive power",
+      "impact": 5,
+      "keywords": ["war powers", "emergency power", "national emergency", "insurrection act", "impoundment", "executive order", "inspector general", "impeach", "subpoena", "contempt of congress", "separation of powers", "congressional oversight", "vacancies act", "self-dealing"]
+    },
+    {
+      "name": "Judiciary & rule of law",
+      "impact": 4,
+      "keywords": ["supreme court", "judicial", "judgeship", "judiciary", "special counsel", "pardon", "department of justice", "attorney general", "prosecutorial", "court order", "rule of law", "obstruction of justice"]
+    },
+    {
+      "name": "Civil liberties & surveillance",
+      "impact": 4,
+      "keywords": ["surveillance", "fisa", "warrantless", "habeas", "due process", "first amendment", "free speech", "censorship", "press freedom", "journalist", "protest", "assembly", "privacy", "encryption backdoor"]
+    },
+    {
+      "name": "Civil rights & equal protection",
+      "impact": 4,
+      "keywords": ["civil rights", "discrimination", "equal protection", "disenfranchis", "citizenship", "birthright"]
+    },
+    {
+      "name": "Government transparency & ethics",
+      "impact": 3,
+      "keywords": ["ethics", "freedom of information", "foia", "financial disclosure", "conflict of interest", "emolument", "whistleblower", "hatch act", "stock trading ban"]
+    },
+    {
+      "name": "Immigration enforcement & detention",
+      "impact": 3,
+      "keywords": ["deportation", "detention", "asylum", "expedited removal", "immigration enforcement", "sanctuary", "alien enemies"]
+    },
+    {
+      "name": "Domestic use of force",
+      "impact": 3,
+      "keywords": ["posse comitatus", "martial law", "national guard deployment", "domestic deployment", "militarization"]
+    }
+  ]
+}

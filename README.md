@@ -14,8 +14,12 @@ mobile-first interactive dashboard on GitHub Pages.
 | Path | What it is |
 |---|---|
 | `scripts/fetch_votes.py` | Incremental fetcher/parser (stdlib only, no deps) |
+| `scripts/score_risk.py` | Democracy-risk scorer (5×5 risk matrix, see below) |
+| `config/risk_rubric.json` | Editable keyword rubric → impact scores |
+| `config/risk_overrides.json` | Hand-curated per-vote score overrides |
 | `data/salinas_votes.csv` | Flat export — roll, date, bill, subject, her vote, party breakdown, pass/fail |
-| `data/salinas_votes.json` | Same data plus metadata, consumed by the dashboard |
+| `data/salinas_votes.json` | Same data plus metadata |
+| `data/salinas_votes_scored.csv/.json` | Above + risk columns, consumed by the dashboard |
 | `docs/index.html` | Self-contained dashboard (no build step, no external libs) |
 | `.github/workflows/update-and-deploy.yml` | Twice-daily refresh + Pages deploy |
 
@@ -64,6 +68,48 @@ python3 -m http.server -d . 8000
 1. **Settings → Pages → Build and deployment → Source: “GitHub Actions.”**
 2. That's it — the workflow deploys on every push to `main` and refreshes data twice
    a day (06:17 & 18:17 UTC). You can also trigger it manually from the Actions tab.
+
+## Democracy-risk matrix
+
+Each roll call is placed on a traditional 5×5 risk matrix scoring **exposure of
+liberal-democratic institutions** — deliberately a transparent heuristic, not a
+black-box judgment:
+
+- **Impact (1–5)** — how democracy-relevant the measure is, from the keyword
+  rubric in `config/risk_rubric.json` matched against the bill/question/subject:
+  elections & voting rights (5), checks & balances / executive power (5),
+  judiciary & rule of law (4), civil liberties & surveillance (4), civil rights
+  (4), transparency & ethics (3), immigration enforcement (3), domestic use of
+  force (3); everything else defaults to routine (1). The highest matching
+  domain wins.
+- **Likelihood / advancement (1–5)** — how far the vote actually moved the
+  measure toward taking effect: failed (1); procedural or amendment win, incl.
+  “providing for consideration” rules (2); House passage, Senate + president
+  still ahead (3, or 4 with a veto-proof margin); veto override, concurrence
+  sending a bill to the president, or a self-executing House resolution —
+  impeachment articles, contempt findings, committee-creating rules (5).
+- **Score = impact × likelihood**, banded **Low ≤ 4 · Moderate 5–9 ·
+  High 10–16 · Critical ≥ 17**.
+
+Three honest caveats, also shown in the dashboard footer:
+
+1. The matrix scores **salience, not direction** — it flags that a vote touched
+   democratic machinery, not which way. Her vote is displayed beside every
+   flagged measure so readers judge direction themselves.
+2. Keyword matching over the Clerk's terse vote descriptions **will miss
+   measures whose titles hide their substance** (and occasionally over-flag).
+   That is what `config/risk_overrides.json` is for: pin any vote's impact,
+   likelihood, domain, or add a note, keyed `"<year>-<roll>"`. Overrides always
+   win.
+3. “Risk to liberal democracy” is an analytical lens, not a neutral fact. The
+   rubric is in version control precisely so every scoring decision is
+   inspectable, editable, and attributable.
+
+Re-score after editing the rubric or overrides (no network needed):
+
+```bash
+python3 scripts/score_risk.py
+```
 
 ## Definitions
 

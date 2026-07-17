@@ -1,0 +1,4 @@
+{
+  "description": "Hand-curated per-vote overrides. Keys are '<year>-<roll>' (e.g. '2025-123'). Any of impact (1-5), likelihood (1-5), domain, and note may be set; unspecified fields keep their computed values. Overrides always win over the keyword rubric.",
+  "votes": {}
+}

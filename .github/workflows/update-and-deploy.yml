@@ -32,7 +32,9 @@ jobs:
 
       - name: Fetch new roll-call votes
         if: github.event_name != 'push'
-        run: python scripts/fetch_votes.py
+        run: |
+          python scripts/fetch_votes.py
+          python scripts/score_risk.py
 
       - name: Commit updated data
         id: commit
@@ -62,11 +64,17 @@ jobs:
         with:
           ref: ${{ github.ref_name }}   # picks up the data commit from the update job, if any
 
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Assemble site
         run: |
+          python scripts/score_risk.py   # re-score so rubric edits deploy without a data commit
           mkdir -p _site/data
           cp docs/index.html _site/
           cp data/salinas_votes.json data/salinas_votes.csv _site/data/
+          cp data/salinas_votes_scored.json data/salinas_votes_scored.csv _site/data/
 
       - uses: actions/configure-pages@v5
 
