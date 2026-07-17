@@ -5,12 +5,10 @@ on:
     - cron: "17 6,18 * * *"   # twice daily, 06:17 & 18:17 UTC
   workflow_dispatch:
   push:
-    branches: [main, "claude/**"]
+    branches: [main]
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
   group: update-and-deploy
@@ -19,8 +17,6 @@ concurrency:
 jobs:
   update-data:
     runs-on: ubuntu-latest
-    outputs:
-      changed: ${{ steps.commit.outputs.changed }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -37,11 +33,9 @@ jobs:
           python scripts/score_risk.py
 
       - name: Commit updated data
-        id: commit
         if: github.event_name != 'push'
         run: |
           if git diff --quiet -- data/; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
             echo "No new votes."
           else
             git config user.name "github-actions[bot]"
@@ -49,16 +43,11 @@ jobs:
             git add data/
             git commit -m "data: refresh Salinas roll-call votes ($(date -u +%F))"
             git push origin HEAD:"$GITHUB_REF_NAME"
-            echo "changed=true" >> "$GITHUB_OUTPUT"
           fi
 
   deploy-pages:
     needs: update-data
-    # deploy on every push to main, and on schedule/dispatch runs
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -72,17 +61,22 @@ jobs:
         run: |
           python scripts/score_risk.py   # re-score so rubric edits deploy without a data commit
           mkdir -p _site/data
-          cp docs/index.html _site/
+          cp docs/index.html _site/index.html
           cp data/salinas_votes.json data/salinas_votes.csv _site/data/
           cp data/salinas_votes_scored.json data/salinas_votes_scored.csv _site/data/
+          touch _site/.nojekyll
 
-      - uses: actions/configure-pages@v5
-        with:
-          enablement: true   # create/enable the Pages site if the repo doesn't have one yet
-
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: _site
-
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      # Publish by force-pushing the built site to the gh-pages branch.
+      # (The Pages REST API rejects site creation by GITHUB_TOKEN, so the
+      # actions/deploy-pages flow can't bootstrap itself; branch serving can.)
+      - name: Publish to gh-pages
+        run: |
+          cd _site
+          git init -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "deploy: ${GITHUB_SHA}"
+          git push --force "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" gh-pages
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

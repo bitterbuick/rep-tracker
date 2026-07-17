@@ -63,11 +63,15 @@ python3 -m http.server -d . 8000
 # or just run:  (cd docs && ln -sfn ../data data) && python3 -m http.server 8000
 ```
 
-## One-time GitHub setup
+## Hosting
 
-1. **Settings → Pages → Build and deployment → Source: “GitHub Actions.”**
-2. That's it — the workflow deploys on every push to `main` and refreshes data twice
-   a day (06:17 & 18:17 UTC). You can also trigger it manually from the Actions tab.
+The dashboard is served by GitHub Pages from the **`gh-pages` branch**, which the
+workflow rebuilds and force-pushes on every deploy (branch publishing works with
+the default workflow token; the Pages “GitHub Actions” source does not, because
+`GITHUB_TOKEN` may not create the Pages site). If Pages ever needs re-enabling:
+**Settings → Pages → Source: “Deploy from a branch” → `gh-pages` / (root)**.
+Data refreshes twice a day (06:17 & 18:17 UTC); the workflow can also be run
+manually from the Actions tab.
 
 ## Democracy-risk matrix
 
