@@ -77,6 +77,8 @@ jobs:
           cp data/salinas_votes_scored.json data/salinas_votes_scored.csv _site/data/
 
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true   # create/enable the Pages site if the repo doesn't have one yet
 
       - uses: actions/upload-pages-artifact@v3
         with:
