@@ -1874,3 +1874,12 @@ year,roll,date,time,congress,session,bill,question,subject,vote_type,salinas_vot
 2026,270,2026-07-21,9:59 PM,119,2nd,H.R. 6955,On Motion to Recommit,Main Street Act,YEA-AND-NAY,Yea,210,1,0,1,0,214,0,4,0,1,0,0,210,216,0,5,D 210-1; R 0-214; I 0-1,Failed,Fail
 2026,271,2026-07-21,10:05 PM,119,2nd,H.R. 6955,On Passage,Main Street Act,YEA-AND-NAY,Yea,56,154,1,1,213,1,0,4,1,0,0,0,270,155,1,5,D 56-154; R 213-1; I 1-0,Passed,Pass
 2026,272,2026-07-21,10:13 PM,119,2nd,H.R. 9770,On Passage,"Making continuing appropriations for fiscal year 2027, and for other purposes",YEA-AND-NAY,Nay,6,204,0,2,213,1,0,4,1,0,0,0,220,205,0,6,D 6-204; R 213-1; I 1-0,Passed,Pass
+2026,273,2026-07-22,4:10 PM,119,2nd,H.R. 8800,On Agreeing to the Amendment,,RECORDED VOTE,No,3,210,0,2,217,0,0,3,1,0,0,0,221,210,0,5,D 3-210; R 217-0; I 1-0,Agreed to,Pass
+2026,274,2026-07-22,4:14 PM,119,2nd,H.R. 8800,On Agreeing to the Amendment,,RECORDED VOTE,No,6,206,0,3,200,18,0,3,1,0,0,0,207,224,0,6,D 6-206; R 200-18; I 1-0,Failed,Fail
+2026,275,2026-07-22,4:19 PM,119,2nd,H.R. 8800,On Agreeing to the Amendment,,RECORDED VOTE,No,17,196,0,2,215,2,0,4,0,1,0,0,232,199,0,6,D 17-196; R 215-2; I 0-1,Agreed to,Pass
+2026,276,2026-07-22,4:22 PM,119,2nd,H.R. 8800,On Agreeing to the Amendment,,RECORDED VOTE,No,1,210,0,4,174,43,0,3,0,1,0,0,175,254,0,7,D 1-210; R 174-43; I 0-1,Failed,Fail
+2026,277,2026-07-22,4:31 PM,119,2nd,H.R. 8800,On Motion to Recommit,National Defense Authorization Act for Fiscal Year 2027,YEA-AND-NAY,Yea,211,0,0,1,2,215,0,1,0,1,0,0,213,216,0,2,D 211-0; R 2-215; I 0-1,Failed,Fail
+2026,278,2026-07-22,4:37 PM,119,2nd,H.R. 8800,On Passage,National Defense Authorization Act for Fiscal Year 2027,YEA-AND-NAY,Nay,6,205,0,1,209,7,0,2,1,0,0,0,216,212,0,3,D 6-205; R 209-7; I 1-0,Passed,Pass
+2026,279,2026-07-22,4:43 PM,119,2nd,H.R. 7008,On Motion to Recommit,Stop Insider Trading Act,YEA-AND-NAY,Yea,211,0,0,1,0,217,0,1,0,1,0,0,211,218,0,2,D 211-0; R 0-217; I 0-1,Failed,Fail
+2026,280,2026-07-22,4:51 PM,119,2nd,H.R. 7008,On Passage,Stop Insider Trading Act,YEA-AND-NAY,Nay,13,198,0,1,218,0,0,0,1,0,0,0,232,198,0,1,D 13-198; R 218-0; I 1-0,Passed,Pass
+2026,281,2026-07-22,4:57 PM,119,2nd,H.Con.Res. 113,On Agreeing to the Resolution,Establishing the congressional budget for the United States Government for fiscal year 2027 and setting forth the appropriate budgetary levels for fiscal years 2028 through 2036,YEA-AND-NAY,Nay,0,211,0,1,216,2,0,0,0,1,0,0,216,214,0,1,D 0-211; R 216-2; I 0-1,Passed,Pass
