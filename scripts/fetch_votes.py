@@ -18,6 +18,7 @@ import datetime
 import json
 import re
 import sys
+import time
 import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -33,6 +34,16 @@ CSV_PATH = DATA_DIR / "salinas_votes.csv"
 MAX_WORKERS = 12
 # Stop sweeping a year after this many consecutive missing roll numbers.
 MISS_LIMIT = 5
+# Since 2026-10 the Clerk answers HTTP 200 with a stub body like
+# <xml>Error sanitizing file "roll315.xml". Please try again.</xml> instead of a
+# 404 for roll numbers that don't exist yet. Retry it a few times in case it is
+# transient on a real roll, then treat it as missing.
+NOT_AVAILABLE_RETRIES = 3
+NOT_AVAILABLE_DELAY = 2  # seconds
+
+
+class RollNotAvailable(Exception):
+    """The Clerk returned a non-roll-call document for this roll number."""
 
 CSV_COLUMNS = [
     "year",
@@ -110,17 +121,21 @@ def fetch_url(url, timeout=30):
 def fetch_roll(year, num):
     """Return parsed vote dict, or None if the roll number does not exist."""
     url = BASE_URL.format(year=year, num=num)
-    for attempt in range(3):
+    for attempt in range(NOT_AVAILABLE_RETRIES):
         try:
             raw = fetch_url(url)
             return parse_vote_xml(raw, year, num)
         except urllib.error.HTTPError as e:
             if e.code == 404:
                 return None
-            if attempt == 2:
+            if attempt == NOT_AVAILABLE_RETRIES - 1:
                 raise
+        except RollNotAvailable:
+            if attempt == NOT_AVAILABLE_RETRIES - 1:
+                return None
+            time.sleep(NOT_AVAILABLE_DELAY)
         except (urllib.error.URLError, TimeoutError, ET.ParseError):
-            if attempt == 2:
+            if attempt == NOT_AVAILABLE_RETRIES - 1:
                 raise
     return None
 
@@ -128,6 +143,8 @@ def fetch_roll(year, num):
 def parse_vote_xml(raw, year, num):
     root = ET.fromstring(raw)
     meta = root.find("vote-metadata")
+    if root.tag != "rollcall-vote" or meta is None:
+        raise RollNotAvailable((root.text or root.tag).strip()[:120])
 
     def get(tag):
         el = meta.find(tag)
@@ -256,13 +273,32 @@ def main():
 
     current_year = datetime.date.today().year
     all_votes = list(existing)
+    added = 0
     for year in range(FIRST_YEAR, current_year + 1):
+        # Backfill holes below the year's high-water mark, so a roll that failed
+        # transiently on an earlier run is not skipped forever.
+        have = {v["roll"] for v in existing if v["year"] == year}
+        gaps = [n for n in range(1, by_year_max.get(year, 0) + 1) if n not in have]
+        if gaps:
+            print(f"Backfilling {year}: {len(gaps)} missing roll(s)...")
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
+                filled = [r for r in pool.map(lambda n: fetch_roll(year, n), gaps) if r]
+            print(f"  {year}: +{len(filled)} backfilled")
+            all_votes.extend(filled)
+            added += len(filled)
+
         start = by_year_max.get(year, 0) + 1
         print(f"Sweeping {year} from roll {start:03d}...")
         new = sweep_year(year, start)
         print(f"  {year}: +{len(new)} votes")
         all_votes.extend(new)
+        added += len(new)
 
+    if not args.full and not added:
+        # Leave the files untouched so the workflow doesn't commit a
+        # timestamp-only change when the House hasn't voted.
+        print(f"No new votes; data unchanged ({len(all_votes)} votes).")
+        return
     write_outputs(all_votes)
     print(f"Wrote {len(all_votes)} votes -> {CSV_PATH.name}, {JSON_PATH.name}")
 
