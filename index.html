@@ -1,0 +1,871 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>Salinas Vote Tracker — OR-6</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%97%B3%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+:root {
+  color-scheme: light;
+  --surface-1: #fcfcfb;
+  --page: #f9f9f7;
+  --text-primary: #0b0b0b;
+  --text-secondary: #52514e;
+  --text-muted: #898781;
+  --grid: #e1e0d9;
+  --baseline: #c3c2b7;
+  --border: rgba(11,11,11,0.10);
+  --series-dem: #2a78d6;   /* categorical slot 1 (blue) — Salinas / Democratic */
+  --series-rep: #e34948;   /* categorical slot 8 (red) — Republican */
+  --status-good: #0ca30c;
+  --status-warning: #fab219;
+  --status-serious: #ec835a;
+  --status-critical: #d03b3b;
+  --delta-good: #006300;
+  --wash: rgba(11,11,11,0.045);
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    color-scheme: dark;
+    --surface-1: #1a1a19;
+    --page: #0d0d0d;
+    --text-primary: #ffffff;
+    --text-secondary: #c3c2b7;
+    --text-muted: #898781;
+    --grid: #2c2c2a;
+    --baseline: #383835;
+    --border: rgba(255,255,255,0.10);
+    --series-dem: #3987e5;
+    --series-rep: #e66767;
+    --status-good: #0ca30c;
+    --status-critical: #d03b3b;
+    --delta-good: #0ca30c;
+    --wash: rgba(255,255,255,0.06);
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --surface-1: #1a1a19;
+  --page: #0d0d0d;
+  --text-primary: #ffffff;
+  --text-secondary: #c3c2b7;
+  --text-muted: #898781;
+  --grid: #2c2c2a;
+  --baseline: #383835;
+  --border: rgba(255,255,255,0.10);
+  --series-dem: #3987e5;
+  --series-rep: #e66767;
+  --status-good: #0ca30c;
+  --status-critical: #d03b3b;
+  --delta-good: #0ca30c;
+  --wash: rgba(255,255,255,0.06);
+}
+* { box-sizing: border-box; margin: 0; }
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  background: var(--page);
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.45;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 1080px; margin: 0 auto; padding: 16px 14px 56px; }
+header.site { padding: 18px 2px 6px; }
+header.site h1 { font-size: 1.35rem; font-weight: 700; letter-spacing: -0.01em; }
+header.site .sub { color: var(--text-secondary); font-size: 0.9rem; margin-top: 2px; }
+header.site .meta { color: var(--text-muted); font-size: 0.78rem; margin-top: 6px; }
+
+/* ---- filter row ---- */
+.filters {
+  display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+  position: sticky; top: 0; z-index: 20;
+  background: var(--page);
+  padding: 10px 2px;
+  border-bottom: 1px solid var(--grid);
+  margin-bottom: 14px;
+}
+.chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  border: 1px solid var(--border); background: var(--surface-1);
+  color: var(--text-secondary); border-radius: 999px;
+  padding: 6px 13px; font-size: 0.85rem; cursor: pointer;
+  font-family: inherit;
+}
+.chip:hover { background: var(--wash); }
+.chip[aria-pressed="true"] {
+  color: var(--text-primary); font-weight: 600;
+  border-color: var(--text-primary);
+}
+.filters select, .filters input[type="search"] {
+  font-family: inherit; font-size: 0.85rem;
+  background: var(--surface-1); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 8px;
+  padding: 7px 10px;
+}
+.filters input[type="search"] { flex: 1 1 140px; min-width: 130px; }
+
+/* ---- KPI tiles ---- */
+.kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; margin-bottom: 14px; }
+@media (min-width: 720px) { .kpis { grid-template-columns: repeat(4, 1fr); } }
+.tile {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 13px 14px;
+}
+.tile .label { font-size: 0.78rem; color: var(--text-secondary); }
+.tile .value { font-size: 1.7rem; font-weight: 600; margin-top: 2px; }
+.tile .note { font-size: 0.74rem; color: var(--text-muted); margin-top: 2px; }
+
+/* ---- cards / charts ---- */
+.grid2 { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 820px) { .grid2 { grid-template-columns: 1fr 1fr; } }
+.card {
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 12px; padding: 14px 14px 10px; margin-bottom: 12px;
+}
+.card h2 { font-size: 0.95rem; font-weight: 650; }
+.card .desc { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 8px; }
+.card svg { display: block; width: 100%; height: auto; }
+.card svg text { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 0.78rem; color: var(--text-secondary); margin: 4px 0 6px; }
+.legend .key { display: inline-flex; align-items: center; gap: 6px; }
+.legend .swatch { width: 12px; height: 12px; border-radius: 3px; }
+.legend .linekey { width: 16px; height: 2.5px; border-radius: 2px; }
+
+details.tablev { margin-top: 6px; border-top: 1px solid var(--grid); padding-top: 6px; }
+details.tablev summary { font-size: 0.78rem; color: var(--text-muted); cursor: pointer; padding: 4px 0; }
+details.tablev table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+details.tablev th, details.tablev td { text-align: left; padding: 4px 8px 4px 0; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }
+details.tablev th { color: var(--text-secondary); font-weight: 600; }
+
+/* ---- tooltip ---- */
+#tip {
+  position: fixed; z-index: 50; pointer-events: none; display: none;
+  background: var(--surface-1); border: 1px solid var(--border);
+  border-radius: 10px; padding: 8px 11px; font-size: 0.8rem;
+  box-shadow: 0 4px 18px rgba(0,0,0,0.18); max-width: 260px;
+}
+#tip .t-title { color: var(--text-muted); font-size: 0.72rem; margin-bottom: 3px; }
+#tip .row { display: flex; align-items: center; gap: 7px; margin-top: 2px; }
+#tip .row .lk { width: 12px; height: 2.5px; border-radius: 2px; flex: none; }
+#tip .row b { font-variant-numeric: tabular-nums; }
+#tip .row span { color: var(--text-secondary); }
+
+/* ---- vote pills ---- */
+.pill { display: inline-block; padding: 1px 9px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; border: 1px solid var(--border); }
+.pill.yea { color: var(--delta-good); }
+.pill.nay { color: var(--status-critical); }
+.pill.nv, .pill.present { color: var(--text-muted); }
+.result-pass { color: var(--delta-good); font-weight: 600; }
+.result-fail { color: var(--status-critical); font-weight: 600; }
+
+/* ---- record list ---- */
+.vote-list { display: flex; flex-direction: column; }
+.vote-item { padding: 11px 2px; border-bottom: 1px solid var(--grid); }
+.vote-item .top { display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+.vote-item .bill { font-weight: 650; font-size: 0.9rem; }
+.vote-item .when { color: var(--text-muted); font-size: 0.75rem; white-space: nowrap; }
+.vote-item .q { color: var(--text-secondary); font-size: 0.83rem; margin-top: 1px; }
+.vote-item .sub { color: var(--text-muted); font-size: 0.78rem; margin-top: 1px; }
+.vote-item .badges { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-top: 6px; font-size: 0.78rem; }
+.vote-item .pb { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.vote-item .broke { color: var(--series-rep); font-weight: 600; font-size: 0.74rem; }
+.morebtn {
+  width: 100%; margin-top: 10px; padding: 10px; border-radius: 10px;
+  border: 1px solid var(--border); background: var(--surface-1);
+  color: var(--text-secondary); font-family: inherit; font-size: 0.85rem; cursor: pointer;
+}
+.morebtn:hover { background: var(--wash); }
+.count-note { font-size: 0.78rem; color: var(--text-muted); margin: 2px 0 4px; }
+.dl { font-size: 0.78rem; }
+.dl a { color: var(--series-dem); }
+footer { color: var(--text-muted); font-size: 0.75rem; margin-top: 26px; line-height: 1.6; }
+footer a { color: var(--text-secondary); }
+#loading { padding: 40px 0; text-align: center; color: var(--text-muted); }
+.themebtn { margin-left: auto; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="site">
+    <h1>Andrea Salinas — House Voting Record</h1>
+    <div class="sub">Democrat · Oregon 6th District · Bioguide S001226</div>
+    <div class="meta" id="updated">Loading…</div>
+  </header>
+
+  <div class="filters" id="filters" hidden>
+    <div class="chips" id="yearChips" role="group" aria-label="Year filter"></div>
+    <select id="voteFilter" aria-label="Filter by her vote">
+      <option value="">Her vote: all</option>
+      <option value="Yea">Yea</option>
+      <option value="Nay">Nay</option>
+      <option value="Present">Present</option>
+      <option value="Not Voting">Not voting</option>
+    </select>
+    <select id="alignFilter" aria-label="Filter by party alignment">
+      <option value="">Alignment: all</option>
+      <option value="with">Voted with Democrats</option>
+      <option value="broke">Broke with Democrats</option>
+    </select>
+    <select id="bandFilter" aria-label="Filter by democracy-risk band">
+      <option value="">Risk: all bands</option>
+      <option value="Low">Low</option>
+      <option value="Moderate">Moderate</option>
+      <option value="High">High</option>
+      <option value="Critical">Critical</option>
+    </select>
+    <input type="search" id="search" placeholder="Search bill or subject…" aria-label="Search bill or subject">
+  </div>
+
+  <div id="loading">Loading vote data…</div>
+
+  <main id="app" hidden>
+    <section class="kpis" aria-label="Summary statistics">
+      <div class="tile"><div class="label">Roll-call votes</div><div class="value" id="kRolls">–</div><div class="note" id="kRollsNote"></div></div>
+      <div class="tile"><div class="label">Participation</div><div class="value" id="kPart">–</div><div class="note">of roll calls voted</div></div>
+      <div class="tile"><div class="label">Party unity</div><div class="value" id="kUnity">–</div><div class="note">voted with Dem majority</div></div>
+      <div class="tile"><div class="label">Broke with party</div><div class="value" id="kBroke">–</div><div class="note">votes against Dem majority</div></div>
+    </section>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Roll calls per month</h2>
+        <p class="desc">Votes she was eligible to cast, by month</p>
+        <div id="chActivity"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+
+      <section class="card">
+        <h2>How she voted</h2>
+        <p class="desc">Distribution of her recorded positions</p>
+        <div id="chSplit"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+
+      <section class="card">
+        <h2>Party unity over time</h2>
+        <p class="desc">Share of her Yea/Nay votes matching the Democratic majority, by month</p>
+        <div id="chUnity"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+
+      <section class="card">
+        <h2>Chamber outcomes on her votes</h2>
+        <p class="desc">Did the House side with her position?</p>
+        <div id="chOutcome"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+    </div>
+
+    <div class="grid2">
+      <section class="card">
+        <h2>Democracy-risk matrix</h2>
+        <p class="desc">Institutional impact × how far the measure advanced. Tap a cell to filter the page; tap again to clear.</p>
+        <div id="chMatrix"></div>
+        <details class="tablev"><summary>View data table</summary><div class="twrap"></div></details>
+      </section>
+
+      <section class="card">
+        <h2>Democracy-salient votes</h2>
+        <p class="desc" id="hrDesc"></p>
+        <div class="vote-list" id="hrList"></div>
+        <button class="morebtn" id="hrMore" hidden>Show more</button>
+      </section>
+    </div>
+
+    <section class="card">
+      <h2>Votes where she broke with Democrats</h2>
+      <p class="desc" id="brokeDesc"></p>
+      <div class="vote-list" id="brokeList"></div>
+      <button class="morebtn" id="brokeMore" hidden>Show more</button>
+    </section>
+
+    <section class="card">
+      <h2>Full voting record</h2>
+      <p class="count-note" id="recCount"></p>
+      <div class="vote-list" id="recList"></div>
+      <button class="morebtn" id="recMore" hidden>Show more</button>
+      <p class="dl" style="margin-top:10px">Download: <a href="data/salinas_votes_scored.csv" download>CSV with risk scores</a> · <a href="data/salinas_votes_scored.json" download>JSON</a> · <a href="data/salinas_votes.csv" download>raw CSV</a></p>
+    </section>
+
+    <footer>
+      Source: <a href="https://clerk.house.gov/Votes" rel="noopener">Clerk of the U.S. House — roll-call vote XML (EVS)</a>.
+      Refreshed daily via GitHub Actions. “Party unity” compares her Yea/Nay votes with the majority position of voting House Democrats on each roll call; quorum calls and votes where she did not vote Yea/Nay are excluded from unity math.
+      The democracy-risk matrix is a transparent heuristic: impact comes from an editable keyword rubric over each measure's subject (elections, checks &amp; balances, judiciary, civil liberties…), advancement from how far the vote moved the measure toward taking effect; score = impact × advancement. It flags salience for review — it is not a judgment of intent, and her vote (for or against) is shown beside every flagged measure. Rubric and per-vote overrides live in the repo.
+      This is an independent, unofficial tracker.
+    </footer>
+  </main>
+</div>
+<div id="tip" role="status"></div>
+
+<script>
+(function () {
+"use strict";
+
+const css = name => getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+const fmtPct = v => (v == null ? "–" : (Math.round(v * 1000) / 10) + "%");
+const fmtInt = v => v.toLocaleString("en-US");
+const MONTH_NAMES = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+let ALL = [];       // all vote records, annotated
+let META = {};
+let HAS_RISK = false;
+const state = { year: "", vote: "", align: "", q: "", band: "", cell: null, brokeShown: 15, recShown: 25, hrShown: 10 };
+const BAND_ORDER = ["Low", "Moderate", "High", "Critical"];
+function bandOf(score) { return score <= 4 ? "Low" : score <= 9 ? "Moderate" : score <= 16 ? "High" : "Critical"; }
+function bandColor(b) {
+  return b === "Low" ? css("--status-good") : b === "Moderate" ? css("--status-warning")
+       : b === "High" ? css("--status-serious") : css("--status-critical");
+}
+
+/* ---------- data load ---------- */
+fetch("data/salinas_votes_scored.json")
+  .then(r => { if (!r.ok) throw new Error(r.status); return r.json(); })
+  .catch(() => fetch("data/salinas_votes.json").then(r => { if (!r.ok) throw new Error(r.status); return r.json(); }))
+  .then(payload => {
+    META = payload;
+    ALL = payload.votes.map(annotate);
+    HAS_RISK = ALL.length > 0 && "risk_band" in ALL[0];
+    if (!HAS_RISK) {
+      document.getElementById("bandFilter").hidden = true;
+      document.getElementById("chMatrix").closest(".grid2").hidden = true;
+    }
+    document.getElementById("updated").textContent =
+      "Data through " + (ALL.length ? ALL[ALL.length - 1].date : "–") +
+      " · " + fmtInt(ALL.length) + " roll calls · updated " + (payload.updated || "").slice(0, 10);
+    document.getElementById("loading").hidden = true;
+    document.getElementById("filters").hidden = false;
+    document.getElementById("app").hidden = false;
+    buildYearChips();
+    bindFilters();
+    render();
+    let rAF = null;
+    addEventListener("resize", () => { cancelAnimationFrame(rAF); rAF = requestAnimationFrame(renderCharts); });
+  })
+  .catch(err => {
+    document.getElementById("loading").textContent = "Could not load vote data (" + err.message + "). Try reloading.";
+  });
+
+function annotate(v) {
+  const demDir = v.dem_yea > v.dem_nay ? "Yea" : (v.dem_nay > v.dem_yea ? "Nay" : "");
+  const cast = v.salinas_vote === "Yea" || v.salinas_vote === "Aye" || v.salinas_vote === "Nay" || v.salinas_vote === "No";
+  const herDir = (v.salinas_vote === "Yea" || v.salinas_vote === "Aye") ? "Yea"
+               : (v.salinas_vote === "Nay" || v.salinas_vote === "No") ? "Nay" : "";
+  const unityEligible = cast && demDir !== "" && v.vote_type !== "QUORUM";
+  const withParty = unityEligible ? herDir === demDir : null;
+  const month = (v.date || "").slice(0, 7);
+  const passed = v.passed === "Pass";
+  const winningSide = passed ? "Yea" : "Nay";
+  const prevailed = herDir ? (herDir === winningSide) : null;
+  return Object.assign({}, v, { demDir, herDir, cast, unityEligible, withParty, month, prevailed });
+}
+
+/* ---------- filters ---------- */
+function buildYearChips() {
+  const years = [...new Set(ALL.map(v => v.year))].sort();
+  const box = document.getElementById("yearChips");
+  const mk = (label, val) => {
+    const b = document.createElement("button");
+    b.className = "chip"; b.textContent = label;
+    b.setAttribute("aria-pressed", String(state.year === val));
+    b.addEventListener("click", () => {
+      state.year = val;
+      box.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", "false"));
+      b.setAttribute("aria-pressed", "true");
+      resetPaging(); render();
+    });
+    box.appendChild(b);
+  };
+  mk("All years", "");
+  years.forEach(y => mk(String(y), String(y)));
+}
+
+function bindFilters() {
+  document.getElementById("voteFilter").addEventListener("change", e => { state.vote = e.target.value; resetPaging(); render(); });
+  document.getElementById("alignFilter").addEventListener("change", e => { state.align = e.target.value; resetPaging(); render(); });
+  document.getElementById("bandFilter").addEventListener("change", e => { state.band = e.target.value; state.cell = null; resetPaging(); render(); });
+  let deb = null;
+  document.getElementById("search").addEventListener("input", e => {
+    clearTimeout(deb);
+    deb = setTimeout(() => { state.q = e.target.value.trim().toLowerCase(); resetPaging(); render(); }, 160);
+  });
+  document.getElementById("brokeMore").addEventListener("click", () => { state.brokeShown += 25; renderBroke(filtered()); });
+  document.getElementById("recMore").addEventListener("click", () => { state.recShown += 50; renderRecord(filtered()); });
+  document.getElementById("hrMore").addEventListener("click", () => { state.hrShown += 25; renderHighRisk(filtered()); });
+}
+function resetPaging() { state.brokeShown = 15; state.recShown = 25; state.hrShown = 10; }
+
+function filtered() {
+  return filteredExceptCell().filter(v =>
+    !state.cell || (v.risk_impact === state.cell.i && v.risk_likelihood === state.cell.l));
+}
+
+function filteredExceptCell() {
+  return ALL.filter(v => {
+    if (state.year && String(v.year) !== state.year) return false;
+    if (state.band && v.risk_band !== state.band) return false;
+    if (state.vote) {
+      if (state.vote === "Yea" && v.herDir !== "Yea") return false;
+      else if (state.vote === "Nay" && v.herDir !== "Nay") return false;
+      else if (state.vote === "Present" && v.salinas_vote !== "Present") return false;
+      else if (state.vote === "Not Voting" && v.salinas_vote !== "Not Voting") return false;
+    }
+    if (state.align === "with" && v.withParty !== true) return false;
+    if (state.align === "broke" && v.withParty !== false) return false;
+    if (state.q) {
+      const hay = (v.bill + " " + v.subject + " " + v.question).toLowerCase();
+      if (!hay.includes(state.q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------- render orchestration ---------- */
+function render() {
+  const data = filtered();
+  renderKPIs(data); renderCharts(data); renderBroke(data); renderRecord(data);
+  if (HAS_RISK) { chartMatrix(filteredExceptCell()); renderHighRisk(data); }
+}
+let lastData = null;
+function renderCharts(data) {
+  if (Array.isArray(data)) lastData = data;
+  if (!lastData) return;
+  chartActivity(lastData); chartSplit(lastData); chartUnity(lastData); chartOutcome(lastData);
+  if (HAS_RISK && !Array.isArray(data)) chartMatrix(filteredExceptCell()); // resize path
+}
+
+function renderKPIs(data) {
+  const castN = data.filter(v => v.cast || v.salinas_vote === "Present").length;
+  const eligible = data.filter(v => v.unityEligible);
+  const withN = eligible.filter(v => v.withParty).length;
+  document.getElementById("kRolls").textContent = fmtInt(data.length);
+  document.getElementById("kRollsNote").textContent = state.year ? "in " + state.year : "since Jan 2023";
+  document.getElementById("kPart").textContent = data.length ? fmtPct(castN / data.length) : "–";
+  document.getElementById("kUnity").textContent = eligible.length ? fmtPct(withN / eligible.length) : "–";
+  document.getElementById("kBroke").textContent = fmtInt(eligible.length - withN);
+}
+
+/* ---------- shared chart utils ---------- */
+const NS = "http://www.w3.org/2000/svg";
+function el(name, attrs, parent) {
+  const n = document.createElementNS(NS, name);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (parent) parent.appendChild(n);
+  return n;
+}
+function clear(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  for (const m of [1, 2, 2.5, 5, 10]) if (v <= m * p) return m * p;
+  return 10 * p;
+}
+const tip = document.getElementById("tip");
+function showTip(x, y, titleText, rows) {
+  clear(tip);
+  const t = document.createElement("div"); t.className = "t-title"; t.textContent = titleText; tip.appendChild(t);
+  rows.forEach(r => {
+    const d = document.createElement("div"); d.className = "row";
+    if (r.color) { const lk = document.createElement("i"); lk.className = "lk"; lk.style.background = r.color; d.appendChild(lk); }
+    const b = document.createElement("b"); b.textContent = r.value; d.appendChild(b);
+    const s = document.createElement("span"); s.textContent = r.label; d.appendChild(s);
+    tip.appendChild(d);
+  });
+  tip.style.display = "block";
+  const w = tip.offsetWidth, h = tip.offsetHeight;
+  let px = x + 14, py = y - h - 10;
+  if (px + w > innerWidth - 8) px = x - w - 14;
+  if (px < 8) px = 8;
+  if (py < 8) py = y + 16;
+  tip.style.left = px + "px"; tip.style.top = py + "px";
+}
+function hideTip() { tip.style.display = "none"; }
+
+function monthSeries(data, valueFn) {
+  const map = new Map();
+  data.forEach(v => { if (!v.month) return; if (!map.has(v.month)) map.set(v.month, []); map.get(v.month).push(v); });
+  const keys = [...map.keys()].sort();
+  return keys.map(k => ({ month: k, label: MONTH_NAMES[+k.slice(5, 7) - 1] + " ’" + k.slice(2, 4), value: valueFn(map.get(k)), items: map.get(k) }));
+}
+function fillTable(card, headers, rows) {
+  const wrap = card.querySelector("details.tablev .twrap");
+  clear2(wrap);
+  const tb = document.createElement("table");
+  const trh = document.createElement("tr");
+  headers.forEach(h => { const th = document.createElement("th"); th.textContent = h; trh.appendChild(th); });
+  tb.appendChild(trh);
+  rows.forEach(r => {
+    const tr = document.createElement("tr");
+    r.forEach(c => { const td = document.createElement("td"); td.textContent = c; tr.appendChild(td); });
+    tb.appendChild(tr);
+  });
+  wrap.appendChild(tb);
+}
+function clear2(node) { while (node.firstChild) node.removeChild(node.firstChild); }
+
+/* ---------- chart 1: roll calls per month (columns) ---------- */
+function chartActivity(data) {
+  const host = document.getElementById("chActivity");
+  const series = monthSeries(data, arr => arr.length);
+  drawColumns(host, series, css("--series-dem"), "roll calls");
+  fillTable(host.closest(".card"), ["Month", "Roll calls"], series.map(s => [s.label, fmtInt(s.value)]));
+}
+
+function drawColumns(host, series, color, unitLabel) {
+  clear2(host);
+  if (!series.length) { emptyNote(host); return; }
+  const W = Math.max(host.clientWidth || 320, 280), H = 210;
+  const m = { t: 12, r: 8, b: 26, l: 34 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const maxV = niceMax(Math.max(...series.map(s => s.value)));
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Column chart of " + unitLabel + " per month" }, host);
+  // gridlines + y ticks
+  for (let i = 0; i <= 4; i++) {
+    const yv = maxV * i / 4, y = m.t + ih - ih * i / 4;
+    el("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: css("--grid"), "stroke-width": 1 }, svg);
+    el("text", { x: m.l - 6, y: y + 3.5, "text-anchor": "end", "font-size": 10, fill: css("--text-muted") }, svg).textContent = fmtInt(yv);
+  }
+  el("line", { x1: m.l, x2: W - m.r, y1: m.t + ih, y2: m.t + ih, stroke: css("--baseline"), "stroke-width": 1 }, svg);
+  const band = iw / series.length;
+  const bw = Math.min(24, Math.max(3, band - 2)); // ≤24px bar, ≥2px surface gap
+  const xTickEvery = Math.ceil(series.length / (W < 500 ? 6 : 10));
+  series.forEach((s, i) => {
+    const x = m.l + band * i + (band - bw) / 2;
+    const h = maxV ? ih * s.value / maxV : 0;
+    const y = m.t + ih - h;
+    const r = Math.min(4, bw / 2, h);
+    // rounded top, square baseline
+    el("path", {
+      d: `M${x},${m.t + ih} V${y + r} Q${x},${y} ${x + r},${y} H${x + bw - r} Q${x + bw},${y} ${x + bw},${y + r} V${m.t + ih} Z`,
+      fill: color
+    }, svg);
+    if (i % xTickEvery === 0) {
+      el("text", { x: x + bw / 2, y: H - 8, "text-anchor": "middle", "font-size": 10, fill: css("--text-muted") }, svg).textContent = s.label;
+    }
+  });
+  attachCrosshair(svg, host, series, m, iw, ih, band, (s) => [{ color, value: fmtInt(s.value), label: unitLabel }]);
+}
+
+function attachCrosshair(svg, host, series, m, iw, ih, band, rowsFn) {
+  const guide = el("line", { y1: m.t, y2: m.t + ih, stroke: css("--baseline"), "stroke-width": 1, visibility: "hidden" }, svg);
+  const move = (clientX, clientY) => {
+    const rect = svg.getBoundingClientRect();
+    const sx = (clientX - rect.left) * (svg.viewBox.baseVal.width / rect.width);
+    let idx = Math.floor((sx - m.l) / band);
+    idx = Math.max(0, Math.min(series.length - 1, idx));
+    const gx = m.l + band * idx + band / 2;
+    guide.setAttribute("x1", gx); guide.setAttribute("x2", gx);
+    guide.setAttribute("visibility", "visible");
+    showTip(clientX, clientY, series[idx].label, rowsFn(series[idx]));
+  };
+  svg.addEventListener("pointermove", e => move(e.clientX, e.clientY));
+  svg.addEventListener("pointerleave", () => { guide.setAttribute("visibility", "hidden"); hideTip(); });
+  svg.setAttribute("tabindex", "0");
+  let focusIdx = 0;
+  svg.addEventListener("keydown", e => {
+    if (e.key !== "ArrowLeft" && e.key !== "ArrowRight") return;
+    e.preventDefault();
+    focusIdx = Math.max(0, Math.min(series.length - 1, focusIdx + (e.key === "ArrowRight" ? 1 : -1)));
+    const rect = svg.getBoundingClientRect();
+    const gx = m.l + band * focusIdx + band / 2;
+    const cx = rect.left + gx * (rect.width / svg.viewBox.baseVal.width);
+    move(cx, rect.top + 40);
+  });
+  svg.addEventListener("blur", () => { guide.setAttribute("visibility", "hidden"); hideTip(); });
+}
+
+function emptyNote(host) {
+  const d = document.createElement("div");
+  d.style.cssText = "padding:34px 0;text-align:center;font-size:.82rem;color:var(--text-muted)";
+  d.textContent = "No votes match the current filters.";
+  host.appendChild(d);
+}
+
+/* ---------- chart 2: her vote split (horizontal bars, one series) ---------- */
+function chartSplit(data) {
+  const host = document.getElementById("chSplit");
+  clear2(host);
+  const cats = [
+    ["Yea", data.filter(v => v.herDir === "Yea").length],
+    ["Nay", data.filter(v => v.herDir === "Nay").length],
+    ["Present", data.filter(v => v.salinas_vote === "Present").length],
+    ["Not voting", data.filter(v => v.salinas_vote === "Not Voting").length],
+  ];
+  const total = data.length;
+  if (!total) { emptyNote(host); return; }
+  const W = Math.max(host.clientWidth || 320, 280), rowH = 40, H = rowH * cats.length + 14;
+  const labelFor = c => fmtInt(c[1]) + " (" + fmtPct(c[1] / total) + ")";
+  const maxLabelW = Math.max(...cats.map(c => labelFor(c).length)) * 7.4 + 10;
+  const m = { l: 84, r: Math.ceil(maxLabelW) };
+  const iw = W - m.l - m.r;
+  const maxV = Math.max(...cats.map(c => c[1]), 1);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Bar chart of her vote distribution" }, host);
+  el("line", { x1: m.l, x2: m.l, y1: 6, y2: H - 8, stroke: css("--baseline"), "stroke-width": 1 }, svg);
+  const color = css("--series-dem");
+  cats.forEach((c, i) => {
+    const y = 10 + rowH * i, bh = 22;
+    const w = Math.max(iw * c[1] / maxV, c[1] > 0 ? 3 : 0);
+    el("text", { x: m.l - 8, y: y + bh / 2 + 4, "text-anchor": "end", "font-size": 12, fill: css("--text-secondary") }, svg).textContent = c[0];
+    if (w > 0) {
+      const r = Math.min(4, w);
+      el("path", { d: `M${m.l},${y} H${m.l + w - r} Q${m.l + w},${y} ${m.l + w},${y + r} V${y + bh - r} Q${m.l + w},${y + bh} ${m.l + w - r},${y + bh} H${m.l} Z`, fill: color }, svg);
+    }
+    el("text", { x: m.l + w + 7, y: y + bh / 2 + 4, "font-size": 12, "font-weight": 600, fill: css("--text-primary") }, svg)
+      .textContent = labelFor(c);
+    const hit = el("rect", { x: 0, y: y - 4, width: W, height: rowH, fill: "transparent" }, svg);
+    hit.addEventListener("pointermove", e => showTip(e.clientX, e.clientY, c[0], [{ color, value: fmtInt(c[1]), label: "of " + fmtInt(total) + " roll calls" }]));
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  fillTable(host.closest(".card"), ["Position", "Votes", "Share"], cats.map(c => [c[0], fmtInt(c[1]), fmtPct(c[1] / total)]));
+}
+
+/* ---------- chart 3: party unity by month (line) ---------- */
+function chartUnity(data) {
+  const host = document.getElementById("chUnity");
+  clear2(host);
+  const series = monthSeries(data.filter(v => v.unityEligible), arr => {
+    const withN = arr.filter(v => v.withParty).length;
+    return arr.length ? withN / arr.length : null;
+  });
+  if (!series.length) { emptyNote(host); fillTable(host.closest(".card"), ["Month", "Party unity"], []); return; }
+  const W = Math.max(host.clientWidth || 320, 280), H = 210;
+  const m = { t: 12, r: 12, b: 26, l: 40 };
+  const iw = W - m.l - m.r, ih = H - m.t - m.b;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Line chart of party unity by month" }, host);
+  const yMin = 0.5, yMax = 1.0;
+  for (let i = 0; i <= 5; i++) {
+    const v = yMin + (yMax - yMin) * i / 5, y = m.t + ih - ih * i / 5;
+    el("line", { x1: m.l, x2: W - m.r, y1: y, y2: y, stroke: css("--grid"), "stroke-width": 1 }, svg);
+    el("text", { x: m.l - 6, y: y + 3.5, "text-anchor": "end", "font-size": 10, fill: css("--text-muted") }, svg).textContent = Math.round(v * 100) + "%";
+  }
+  const band = iw / series.length;
+  const X = i => m.l + band * i + band / 2;
+  const Y = v => m.t + ih - ih * (Math.max(v, yMin) - yMin) / (yMax - yMin);
+  const color = css("--series-dem");
+  const pts = series.map((s, i) => [X(i), Y(s.value)]);
+  el("path", { d: "M" + pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1)).join(" L"), fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round", "stroke-linecap": "round" }, svg);
+  // end marker with surface ring + end label
+  const last = pts[pts.length - 1];
+  el("circle", { cx: last[0], cy: last[1], r: 6, fill: css("--surface-1") }, svg);
+  el("circle", { cx: last[0], cy: last[1], r: 4, fill: color }, svg);
+  el("text", { x: Math.min(last[0] + 8, W - 34), y: last[1] - 8, "font-size": 11, "font-weight": 600, fill: css("--text-primary") }, svg).textContent = fmtPct(series[series.length - 1].value);
+  const xTickEvery = Math.ceil(series.length / (W < 500 ? 6 : 10));
+  series.forEach((s, i) => {
+    if (i % xTickEvery === 0)
+      el("text", { x: X(i), y: H - 8, "text-anchor": "middle", "font-size": 10, fill: css("--text-muted") }, svg).textContent = s.label;
+  });
+  attachCrosshair(svg, host, series, m, iw, ih, band, s => [
+    { color, value: fmtPct(s.value), label: "with Dem majority" },
+    { value: fmtInt(s.items.length), label: "eligible votes" },
+  ]);
+  fillTable(host.closest(".card"), ["Month", "Party unity", "Eligible votes"],
+    series.map(s => [s.label, fmtPct(s.value), fmtInt(s.items.length)]));
+}
+
+/* ---------- chart 4: outcomes vs her position (stacked h-bars, 2 series) ---------- */
+function chartOutcome(data) {
+  const host = document.getElementById("chOutcome");
+  clear2(host);
+  const cast = data.filter(v => v.herDir);
+  if (!cast.length) { emptyNote(host); fillTable(host.closest(".card"), ["Her position", "Prevailed", "Did not prevail"], []); return; }
+  const rows = [
+    { name: "She voted Yea", items: cast.filter(v => v.herDir === "Yea") },
+    { name: "She voted Nay", items: cast.filter(v => v.herDir === "Nay") },
+  ].map(r => ({
+    name: r.name,
+    won: r.items.filter(v => v.prevailed).length,
+    lost: r.items.filter(v => !v.prevailed).length,
+  }));
+  // legend (2 series → legend required)
+  const lg = document.createElement("div"); lg.className = "legend";
+  const key = (colorVar, label) => {
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("i"); sw.className = "swatch"; sw.style.background = css(colorVar);
+    const t = document.createElement("span"); t.textContent = label;
+    k.appendChild(sw); k.appendChild(t); lg.appendChild(k);
+  };
+  key("--series-dem", "Her side prevailed");
+  key("--series-rep", "Her side lost");
+  host.appendChild(lg);
+  const W = Math.max(host.clientWidth || 320, 280), rowH = 46, H = rowH * rows.length + 12;
+  const m = { l: 108, r: 58 };
+  const iw = W - m.l - m.r;
+  const maxV = Math.max(...rows.map(r => r.won + r.lost), 1);
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Stacked bars of chamber outcomes by her position" }, host);
+  const cWin = css("--series-dem"), cLose = css("--series-rep");
+  rows.forEach((r, i) => {
+    const y = 8 + rowH * i, bh = 22;
+    el("text", { x: m.l - 8, y: y + bh / 2 + 4, "text-anchor": "end", "font-size": 12, fill: css("--text-secondary") }, svg).textContent = r.name;
+    const total = r.won + r.lost;
+    const wWon = iw * r.won / maxV;
+    const wLost = iw * r.lost / maxV;
+    if (r.won > 0) el("rect", { x: m.l, y, width: Math.max(wWon - 1, 2), height: bh, fill: cWin, rx: 0 }, svg);
+    if (r.lost > 0) {
+      const x2 = m.l + wWon + (r.won > 0 ? 1 : 0); // 2px surface gap between segments
+      const w2 = Math.max(wLost - 1, 2), rr = Math.min(4, w2);
+      el("path", { d: `M${x2},${y} H${x2 + w2 - rr} Q${x2 + w2},${y} ${x2 + w2},${y + rr} V${y + bh - rr} Q${x2 + w2},${y + bh} ${x2 + w2 - rr},${y + bh} H${x2} Z`, fill: cLose }, svg);
+    } else if (r.won > 0) {
+      // round the data end of the win segment when it's the outermost
+      const rr = 4, xe = m.l + wWon;
+      el("rect", { x: Math.max(m.l, xe - 8), y, width: 8, height: bh, fill: css("--surface-1") }, svg);
+      el("path", { d: `M${Math.max(m.l, xe - 8)},${y} H${xe - rr} Q${xe},${y} ${xe},${y + rr} V${y + bh - rr} Q${xe},${y + bh} ${xe - rr},${y + bh} H${Math.max(m.l, xe - 8)} Z`, fill: cWin }, svg);
+    }
+    el("text", { x: m.l + wWon + wLost + 7, y: y + bh / 2 + 4, "font-size": 11.5, "font-weight": 600, fill: css("--text-primary") }, svg)
+      .textContent = fmtPct(total ? r.won / total : 0);
+    const hit = el("rect", { x: 0, y: y - 6, width: W, height: rowH, fill: "transparent" }, svg);
+    hit.addEventListener("pointermove", e => showTip(e.clientX, e.clientY, r.name + " (" + fmtInt(total) + " votes)", [
+      { color: cWin, value: fmtInt(r.won), label: "her side prevailed" },
+      { color: cLose, value: fmtInt(r.lost), label: "her side lost" },
+    ]));
+    hit.addEventListener("pointerleave", hideTip);
+  });
+  fillTable(host.closest(".card"), ["Her position", "Prevailed", "Did not prevail", "Win rate"],
+    rows.map(r => [r.name, fmtInt(r.won), fmtInt(r.lost), fmtPct((r.won + r.lost) ? r.won / (r.won + r.lost) : 0)]));
+}
+
+/* ---------- risk matrix (5x5 heatmap, semantic severity heat) ---------- */
+function chartMatrix(data) {
+  const host = document.getElementById("chMatrix");
+  clear2(host);
+  // legend: band severity scale (status colors always paired with their label)
+  const lg = document.createElement("div"); lg.className = "legend";
+  BAND_ORDER.forEach(b => {
+    const k = document.createElement("span"); k.className = "key";
+    const sw = document.createElement("i"); sw.className = "swatch"; sw.style.background = bandColor(b);
+    const t = document.createElement("span"); t.textContent = b;
+    k.appendChild(sw); k.appendChild(t); lg.appendChild(k);
+  });
+  host.appendChild(lg);
+
+  const counts = {};
+  data.forEach(v => {
+    const key = v.risk_impact + "-" + v.risk_likelihood;
+    counts[key] = (counts[key] || 0) + 1;
+  });
+  const W = Math.max(host.clientWidth || 320, 280);
+  const m = { l: 46, t: 6, b: 40 };
+  const cs = Math.min((W - m.l - 6) / 5, 58);
+  const H = m.t + cs * 5 + m.b;
+  const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "Risk matrix: impact by advancement, cell counts" }, host);
+  for (let i = 5; i >= 1; i--) {
+    const y = m.t + (5 - i) * cs;
+    el("text", { x: m.l - 8, y: y + cs / 2 + 3.5, "text-anchor": "end", "font-size": 11, fill: css("--text-muted") }, svg).textContent = i;
+    for (let l = 1; l <= 5; l++) {
+      const x = m.l + (l - 1) * cs;
+      const n = counts[i + "-" + l] || 0;
+      const b = bandOf(i * l);
+      const sel = state.cell && state.cell.i === i && state.cell.l === l;
+      const cell = el("rect", {
+        x: x + 1, y: y + 1, width: cs - 2, height: cs - 2, rx: 4,
+        fill: bandColor(b), "fill-opacity": n > 0 ? 0.34 : 0.10,
+        stroke: sel ? css("--text-primary") : "none", "stroke-width": sel ? 2 : 0,
+        tabindex: 0, role: "button", cursor: "pointer",
+        "aria-label": `Impact ${i}, advancement ${l}: ${n} votes, ${b} band` + (sel ? " (selected)" : ""),
+      }, svg);
+      cell.style.cursor = "pointer";
+      if (n > 0) {
+        el("text", { x: x + cs / 2, y: y + cs / 2 + 4, "text-anchor": "middle", "font-size": 12, "font-weight": 600, fill: css("--text-primary"), "pointer-events": "none" }, svg).textContent = fmtInt(n);
+      }
+      const toggle = () => { state.cell = sel ? null : { i, l }; state.brokeShown = 15; state.recShown = 25; state.hrShown = 10; render(); };
+      cell.addEventListener("click", toggle);
+      cell.addEventListener("keydown", e => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); } });
+      cell.addEventListener("pointermove", e => showTip(e.clientX, e.clientY,
+        "Impact " + i + " × Advancement " + l,
+        [{ color: bandColor(b), value: fmtInt(n), label: "votes · " + b + " band" }]));
+      cell.addEventListener("pointerleave", hideTip);
+    }
+  }
+  for (let l = 1; l <= 5; l++) {
+    el("text", { x: m.l + (l - 1) * cs + cs / 2, y: m.t + cs * 5 + 15, "text-anchor": "middle", "font-size": 11, fill: css("--text-muted") }, svg).textContent = l;
+  }
+  el("text", { x: m.l + cs * 2.5, y: H - 6, "text-anchor": "middle", "font-size": 10.5, fill: css("--text-secondary") }, svg).textContent = "Advancement toward taking effect →";
+  el("text", { x: 12, y: m.t + cs * 2.5, "font-size": 10.5, fill: css("--text-secondary"), transform: `rotate(-90 12 ${m.t + cs * 2.5})`, "text-anchor": "middle" }, svg).textContent = "Institutional impact →";
+
+  fillTable(host.closest(".card"), ["Impact ↓ / Advancement →", "1", "2", "3", "4", "5"],
+    [5, 4, 3, 2, 1].map(i => [String(i)].concat([1, 2, 3, 4, 5].map(l => fmtInt(counts[i + "-" + l] || 0)))));
+}
+
+/* ---------- democracy-salient votes (High + Critical) ---------- */
+function renderHighRisk(data) {
+  const hr = data.filter(v => v.risk_score >= 10).slice().reverse();
+  document.getElementById("hrDesc").textContent =
+    fmtInt(hr.length) + " High/Critical-band roll calls under the current filters (most recent first)";
+  const list = document.getElementById("hrList");
+  clear2(list);
+  hr.slice(0, state.hrShown).forEach(v => list.appendChild(voteItem(v)));
+  if (!hr.length) { const d = document.createElement("div"); d.className = "count-note"; d.textContent = "None under the current filters."; list.appendChild(d); }
+  document.getElementById("hrMore").hidden = hr.length <= state.hrShown;
+}
+
+/* ---------- vote item renderer ---------- */
+function voteItem(v) {
+  const item = document.createElement("article"); item.className = "vote-item";
+  const top = document.createElement("div"); top.className = "top";
+  const bill = document.createElement("span"); bill.className = "bill";
+  bill.textContent = v.bill && v.bill !== "QUORUM" ? v.bill : (v.question || "Procedural vote");
+  const when = document.createElement("span"); when.className = "when";
+  when.textContent = v.date + " · Roll " + v.roll;
+  top.appendChild(bill); top.appendChild(when); item.appendChild(top);
+  if (v.bill && v.bill !== "QUORUM" && v.question) {
+    const q = document.createElement("div"); q.className = "q"; q.textContent = v.question; item.appendChild(q);
+  }
+  if (v.subject) {
+    const s = document.createElement("div"); s.className = "sub"; s.textContent = v.subject; item.appendChild(s);
+  }
+  const badges = document.createElement("div"); badges.className = "badges";
+  const pill = document.createElement("span");
+  const vt = v.salinas_vote || "—";
+  pill.className = "pill " + (v.herDir === "Yea" ? "yea" : v.herDir === "Nay" ? "nay" : vt === "Present" ? "present" : "nv");
+  pill.textContent = "Salinas: " + vt;
+  badges.appendChild(pill);
+  const res = document.createElement("span");
+  res.className = v.passed === "Pass" ? "result-pass" : "result-fail";
+  res.textContent = v.result;
+  badges.appendChild(res);
+  const pb = document.createElement("span"); pb.className = "pb"; pb.textContent = v.party_breakdown;
+  badges.appendChild(pb);
+  if (v.withParty === false) {
+    const bk = document.createElement("span"); bk.className = "broke"; bk.textContent = "✕ broke with Dems";
+    badges.appendChild(bk);
+  }
+  if (HAS_RISK && v.risk_band && v.risk_band !== "Low") {
+    const rk = document.createElement("span"); rk.className = "riskchip";
+    const dot = document.createElement("i"); dot.style.cssText = "display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:baseline;background:" + bandColor(v.risk_band);
+    rk.appendChild(dot);
+    rk.appendChild(document.createTextNode(v.risk_band + " risk" + (v.risk_domain && v.risk_domain !== "Routine policy" ? " · " + v.risk_domain : "")));
+    rk.style.cssText += ";font-size:.74rem;color:var(--text-secondary)";
+    badges.appendChild(rk);
+  }
+  item.appendChild(badges);
+  return item;
+}
+
+/* ---------- broke-with-party section ---------- */
+function renderBroke(data) {
+  const broke = data.filter(v => v.withParty === false).slice().reverse();
+  document.getElementById("brokeDesc").textContent =
+    fmtInt(broke.length) + " roll calls where her Yea/Nay differed from the Democratic majority (most recent first)";
+  const list = document.getElementById("brokeList");
+  clear2(list);
+  broke.slice(0, state.brokeShown).forEach(v => list.appendChild(voteItem(v)));
+  if (!broke.length) { const d = document.createElement("div"); d.className = "count-note"; d.textContent = "None under the current filters."; list.appendChild(d); }
+  document.getElementById("brokeMore").hidden = broke.length <= state.brokeShown;
+}
+
+/* ---------- full record ---------- */
+function renderRecord(data) {
+  const rec = data.slice().reverse();
+  document.getElementById("recCount").textContent =
+    "Showing " + fmtInt(Math.min(state.recShown, rec.length)) + " of " + fmtInt(rec.length) + " roll calls (most recent first)";
+  const list = document.getElementById("recList");
+  clear2(list);
+  rec.slice(0, state.recShown).forEach(v => list.appendChild(voteItem(v)));
+  if (!rec.length) { const d = document.createElement("div"); d.className = "count-note"; d.textContent = "No votes match the current filters."; list.appendChild(d); }
+  document.getElementById("recMore").hidden = rec.length <= state.recShown;
+}
+
+})();
+</script>
+</body>
+</html>
